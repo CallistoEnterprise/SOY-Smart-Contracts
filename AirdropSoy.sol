@@ -171,7 +171,7 @@ contract Airdrop is Ownable, ERC223Recipient {
     }
     
     IERC223 public token;   // token to airdrop
-    uint256 constant public lockPeriod = 180;  // 180 days (6 months) lock period
+    uint256 constant public lockPeriod = 180 days;  // 180 days (6 months) lock period
     mapping(uint256 => mapping(address => User)) public receivers; // airdrop ID => user address => amount and timestamp
     mapping(uint256 => mapping(uint256 => Participants)) public participants; // airdrop ID => day => Participants
     Setting[] public airdrops;
