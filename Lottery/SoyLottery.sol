@@ -678,8 +678,8 @@ contract SoyLottery is ReentrancyGuard, ISoyLottery, Ownable {
     uint256 public pendingInjectionNextLottery;
 
     uint256 public constant MIN_DISCOUNT_DIVISOR = 300;
-    uint256 public constant MIN_LENGTH_LOTTERY = 1 hours - 5 minutes; // 4 hours
-    uint256 public constant MAX_LENGTH_LOTTERY = 4 days + 5 minutes; // 4 days
+    uint256 public MIN_LENGTH_LOTTERY = 20 hours - 5 minutes; // 4 hours
+    uint256 public MAX_LENGTH_LOTTERY = 8 days + 5 minutes; // 4 days
     uint256 public constant MAX_TREASURY_FEE = 3000; // 30%
 
     IERC20 public soyToken;
@@ -1127,6 +1127,22 @@ contract SoyLottery is ReentrancyGuard, ISoyLottery, Ownable {
 
         minPriceTicketInSoy = _minPriceTicketInSoy;
         maxPriceTicketInSoy = _maxPriceTicketInSoy;
+    }
+
+    /**
+     * @notice Set duration of lottery round
+     * @dev Only callable by owner
+     * @param _minRoundDuration: minimum duration of lottery round
+     * @param _maxRoundDuration: maximum duration of lottery round
+     */
+    function setMinAndMaxRoundDuration(uint256 _minRoundDuration, uint256 _maxRoundDuration)
+        external
+        onlyOwner
+    {
+        require(_minRoundDuration < _maxRoundDuration, "min must be < max");
+
+        MIN_LENGTH_LOTTERY = _minRoundDuration;
+        MAX_LENGTH_LOTTERY = _maxRoundDuration;
     }
 
     /**
