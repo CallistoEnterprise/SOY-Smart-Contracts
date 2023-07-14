@@ -9,7 +9,7 @@ const {RandomNumberGenerator_ABI, SoyLottery_ABI} = require('./abi.js');
 //const RandomNumberGenerator_addr = "0x09D8B4A17edd82CA0681409329A31DC04B74bae2";
 //const provider = "https://testnet-rpc.callisto.network"; // CLO test net
 // Callisto Main net
-const SoyLottery_addr = "0xF20e070F02f9Ca1eeD3a34D098F3dB15C0F36483";
+const SoyLottery_addr = "0x56a455a29317b4813350221F07Cc1A7d7eF5142B";
 const RandomNumberGenerator_addr = "0x9BfA10ec7cBDfa029692c95E493f2fc1BdCb25af";
 const provider =  "https://rpc.callisto.network/"; // CLO main net
 
@@ -20,12 +20,13 @@ const BotToken = process.env.BOT_TOKEN; // telegram bot token
 //console.log(chatId); // check if is settings is loaded
 
 const lottery = {
-    priceTicketInSoy: "250000000000000000000", //250 SOY
-    discountDivisor: 480, // 5% discount when buy 25 tickets
+    priceTicketInSoy: "10000000000000000000", //10 SOY
+    discountDivisor: 1980, // 5% discount when buy 100 tickets
     rewardsBreakdown: [1111, 2777, 6112, 0, 0, 0], // 11.11% of rewards to 1 number, 27.77% - to 2 numbers, 61.12% - to 3 numbers
     treasuryFee: 1000, // 10% of collected money go to treasury (or burn), the rest go to rewards pool
     align : 86400, // 24 hours. Lottery end time align to this value. I.e. if align = 86400 then end time will be next 00:00:00 UTC
-    offset: 8*3600 + 55*60, // +8:50 hours to align time
+    offset: 9*3600 - 10, // +9:00 hours to align time
+    duration: 7, // duration in days
     autoInjection: 1, // 1 - rewards that were not winned will be injected to next lottery round; 0 - unused money will go to treasury (or burn)
 }
 
@@ -35,9 +36,9 @@ web3.eth.accounts.wallet.add(acc);
 const SoyLottery = new web3.eth.Contract(SoyLottery_ABI, SoyLottery_addr);
 const RandomNumberGenerator = new web3.eth.Contract(RandomNumberGenerator_ABI, RandomNumberGenerator_addr);
 var CurrentLotteryId;
-var currentTime = Math.floor(Date.now() / 1000);
 
 async function main() {
+    var currentTime = Math.floor(Date.now() / 1000);
     try {
         CurrentLotteryId = await SoyLottery.methods.viewCurrentLotteryId().call();
         console.log("CurrentLotteryId: ",CurrentLotteryId);
@@ -48,7 +49,7 @@ async function main() {
             var params = {from: acc.address, value: 0, gas: parseInt(gas_limit)+20000,};
             await SoyLottery.methods.closeLottery(CurrentLotteryId).send(params);
 
-            var rnd = web3.utils.randomHex(32);
+            var rnd = genSecret(LotteryData.endTime); //web3.utils.randomHex(32);
             //console.log("random: ", rnd);
             gas_limit = await RandomNumberGenerator.methods.commitSecret(web3.utils.keccak256(rnd)).estimateGas({from: acc.address});
             params = {from: acc.address, value: 0, gas: parseInt(gas_limit)+20000,};
@@ -61,31 +62,40 @@ async function main() {
         }
         else if (LotteryData.status == 2) {
             // random number generation is not complete
-            sendMessage("random number generation is not complete");
+            console.log("random number generation is not complete. try again");
+            var rnd = genSecret(LotteryData.endTime);
+            // should wait 1 block
+            delayedTransaction(1, rnd);
+        } else if (LotteryData.status == 3) {
+            await startLottery(currentTime);
         }
+    
     }
     catch (e) {
         console.log("Error: ", e.toString());
-        sendMessage(e.toString());
+        sendMessageAndExit(e.toString());
     }
 }
 
-async function startLottery() {
+async function startLottery(currentTime) {
     try 
     {
-        console.log("start new lottery");
-        var endTime = (Math.trunc(currentTime / lottery.align) + 1) * lottery.align + lottery.offset;
-        if (endTime - currentTime < 3600) endTime += lottery.align;
+        console.log("start new lottery at: ", currentTime);
+        var endTime = (Math.trunc(currentTime / lottery.align) * lottery.align + lottery.offset) + (lottery.align * lottery.duration);
+        //endTime = 1689325180;
+        //if (endTime - currentTime < 3600) endTime += lottery.align;
         var gas_limit = await SoyLottery.methods.startLottery(endTime, lottery.priceTicketInSoy, lottery.discountDivisor, lottery.rewardsBreakdown, lottery.treasuryFee).estimateGas({from: acc.address});
         var params = {from: acc.address, value: 0, gas: parseInt(gas_limit)+20000,};
-        await SoyLottery.methods.startLottery(endTime, lottery.priceTicketInSoy, lottery.discountDivisor, lottery.rewardsBreakdown, lottery.treasuryFee).send(params);
+        var tx = await SoyLottery.methods.startLottery(endTime, lottery.priceTicketInSoy, lottery.discountDivisor, lottery.rewardsBreakdown, lottery.treasuryFee).send(params);
+        console.log(tx);
         var bal = await web3.eth.getBalance(acc.address);
         // send message if operator wallet has less than 5 CLO
-        if (parseFloat(web3.utils.fromWei(bal)) < 5) sendMessage("Low ballance of Lottery Operator "+acc.address);
+        if (parseFloat(web3.utils.fromWei(bal)) < 5) sendMessageAndExit("Low ballance of Lottery Operator "+acc.address);
+        sendMessageAndExit("start new lottery at: "+ currentTime);
     }
     catch (e) {
         console.log("Error: ", e.toString());
-        sendMessage(e.toString());
+        sendMessageAndExit(e.toString());
     }
 }
 
@@ -117,14 +127,21 @@ async function delayedTransaction(block, rnd) {
     }
     catch (e) {
         console.log("Error: ", e.toString());
-        sendMessage(e.toString());
+        sendMessageAndExit(e.toString());
     }
 }
 
-async function sendMessage(msg) {
+async function sendMessageAndExit(msg) {
     const bot = new TelegramBot(BotToken, {polling: true});
 
     await bot.sendMessage(chatId, msg);
     process.exit();
 }
+
+function genSecret(seed) {
+    var s = web3.utils.keccak256(pk);
+    var s1 = web3.utils.keccak256(seed.toString()+s);
+    return web3.utils.keccak256("Callisto"+s+s1);
+}
+
 main();

@@ -199,7 +199,6 @@ contract SoyStaking is Ownable {
     function notifyRewardAmount(uint256 reward) external {}
 
     // ERC223 token transfer callback
-    // bytes _data = abi.encode(address receiver, uint256 toChainId)
     function tokenReceived(
         address _from,
         uint256 _value,
