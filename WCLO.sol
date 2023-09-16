@@ -122,7 +122,7 @@ contract WCLO_ERC223 {
     function tokenReceived(address _from, uint _value, bytes memory /*_data*/) external {
         require(msg.sender == address(this), "Only when transfer WCLO");
         // withdraw CLO
-        balanceOf[_from] -= _value;
+        balanceOf[address(this)] -= _value;
         payable(_from).transfer(_value);
         emit Withdrawal(_from, _value);
     }

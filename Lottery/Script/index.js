@@ -25,7 +25,7 @@ const lottery = {
     rewardsBreakdown: [1111, 2777, 6112, 0, 0, 0], // 11.11% of rewards to 1 number, 27.77% - to 2 numbers, 61.12% - to 3 numbers
     treasuryFee: 1000, // 10% of collected money go to treasury (or burn), the rest go to rewards pool
     align : 86400, // 24 hours. Lottery end time align to this value. I.e. if align = 86400 then end time will be next 00:00:00 UTC
-    offset: 9*3600 - 10, // +9:00 hours to align time
+    offset: 9*3600 - 60, // +9:00 hours to align time
     duration: 7, // duration in days
     autoInjection: 1, // 1 - rewards that were not winned will be injected to next lottery round; 0 - unused money will go to treasury (or burn)
 }
