@@ -162,8 +162,9 @@ abstract contract ERC223Recipient {
     * @param _value Amount of tokens.
     * @param _data  Transaction metadata.
     */
-    function tokenReceived(address _from, uint256 _value, bytes memory _data) external virtual {
+    function tokenReceived(address _from, uint256 _value, bytes memory _data) external virtual returns(bytes4) {
         require(depositors[_from], "Only depositors allowed");
+        return this.tokenReceived.selector;
     }
 
     constructor (address _token) {
@@ -225,8 +226,7 @@ contract Vesting is Ownable, ERC223Recipient {
         totalAllocated += amount;
         // Check ERC223 compatibility of the beneficiary 
         if (isContract(to)) {
-            bytes memory _empty = hex"00000000";
-            ERC223Recipient(to).tokenReceived(address(this), 0, _empty);
+            ERC223Recipient(to).tokenReceived(address(this), 0, "");
         }
 
         emit AddAllocation(to, amount, unlockPercentage, startVesting, vestingPercentage, vestingInterval);
@@ -241,7 +241,7 @@ contract Vesting is Ownable, ERC223Recipient {
         require(unlockedAmount != 0, "No unlocked tokens");
         claimedAmount[beneficiary] += unlockedAmount;
         totalClaimed += unlockedAmount;
-        IERC223(vestedToken).transfer(beneficiary, unlockedAmount);
+        safeTransfer(vestedToken, beneficiary, unlockedAmount);
         emit Claim(beneficiary, unlockedAmount);
     }
 
@@ -274,7 +274,7 @@ contract Vesting is Ownable, ERC223Recipient {
             amount = IERC223(_token).balanceOf(address(this));
         }
 
-        IERC223(_token).transfer(msg.sender, amount);
+        safeTransfer(_token, msg.sender, amount);
         emit Rescue(_token, amount);
     }
 
@@ -297,5 +297,11 @@ contract Vesting is Ownable, ERC223Recipient {
         // solhint-disable-next-line no-inline-assembly
         assembly { size := extcodesize(account) }
         return size > 0;
+    }
+    
+    function safeTransfer(address token, address to, uint value) internal {
+        // bytes4(keccak256(bytes('transfer(address,uint256)')));
+        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(0xa9059cbb, to, value));
+        require(success && (data.length == 0 || abi.decode(data, (bool))), 'TransferHelper: TRANSFER_FAILED');
     }
 }
