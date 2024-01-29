@@ -155,14 +155,11 @@ abstract contract ERC223Recipient {
         require(depositors[msg.sender], "Only depositors allowed");
         _;
     }
+
     /**
     * @dev Standard ERC223 function that will handle incoming token transfers.
-    *
-    * @param _from  Token sender address.
-    * @param _value Amount of tokens.
-    * @param _data  Transaction metadata.
     */
-    function tokenReceived(address _from, uint256 _value, bytes memory _data) external virtual returns(bytes4) {
+    function tokenReceived(address _from, uint256, bytes memory) external virtual returns(bytes4) {
         require(depositors[_from], "Only depositors allowed");
         return this.tokenReceived.selector;
     }
@@ -177,9 +174,9 @@ contract Vesting is Ownable, ERC223Recipient {
     struct Allocation {
         uint256 amount;             // amount of token
         uint256 unlockPercentage;   // percentage of initially unlocked token
-        uint256 startVesting;       // Timestamp (unix time) when starts vesting. First vesting will be at this time
-        uint256 vestingPercentage;  // percentage of tokens will be unlocked every interval (i.e. 10% per 30 days)
-        uint256 vestingInterval;    // interval (in seconds) of vesting (i.e. 30 days)        
+        uint256 finishVesting;       // Timestamp (unix time) when finish vesting. First release will be at this time
+        uint256 cliffPercentage;  // percentage of tokens will be unlocked every interval (i.e. 10% per 30 days)
+        uint256 cliffInterval;    // interval (in seconds) of vesting (i.e. 30 days)        
     }
 
     uint256 public totalAllocated;
@@ -193,9 +190,9 @@ contract Vesting is Ownable, ERC223Recipient {
         address indexed to,         // beneficiary of tokens
         uint256 amount,             // amount of token
         uint256 unlockPercentage,   // percentage of initially unlocked token
-        uint256 startVesting,       // Timestamp (unix time) when starts vesting. First vesting will be at this time
-        uint256 vestingPercentage,  // percentage of tokens will be unlocked every interval (i.e. 10% per 30 days)
-        uint256 vestingInterval     // interval (in seconds) of vesting (i.e. 30 days)        
+        uint256 finishVesting,       // Timestamp (unix time) when finish vesting. First release will be at this time
+        uint256 cliffPercentage,  // percentage of tokens will be unlocked every interval (i.e. 10% per 30 days)
+        uint256 cliffInterval     // interval (in seconds) of vesting (i.e. 30 days)        
     );
     event Rescue(address _token, uint256 _amount);
 
@@ -213,23 +210,22 @@ contract Vesting is Ownable, ERC223Recipient {
         address to, // beneficiary of tokens
         uint256 amount, // amount of token
         uint256 unlockPercentage,   // percentage of initially unlocked token
-        uint256 startVesting,       // Timestamp (unix time) when starts vesting. First vesting will be at this time
-        uint256 vestingPercentage,  // percentage of tokens will be unlocked every interval (i.e. 10% per 30 days)
-        uint256 vestingInterval     // interval (in seconds) of vesting (i.e. 30 days)
+        uint256 finishVesting,       // Timestamp (unix time) when starts vesting. First vesting will be at this time
+        uint256 cliffPercentage,  // percentage of tokens will be unlocked every interval (i.e. 10% per 30 days)
+        uint256 cliffInterval     // interval (in seconds) of vesting (i.e. 30 days)
     )
         external
         onlyDepositor
     {
         require(amount <= getUnallocatedAmount(), "Not enough tokens");
-        require(startVesting > block.timestamp, "startVesting in the past");
-        beneficiaries[to].push(Allocation(amount, unlockPercentage, startVesting, vestingPercentage, vestingInterval));
+        require(finishVesting > block.timestamp, "finishVesting in the past");
+        beneficiaries[to].push(Allocation(amount, unlockPercentage, finishVesting, cliffPercentage, cliffInterval));
         totalAllocated += amount;
         // Check ERC223 compatibility of the beneficiary 
         if (isContract(to)) {
             ERC223Recipient(to).tokenReceived(address(this), 0, "");
         }
-
-        emit AddAllocation(to, amount, unlockPercentage, startVesting, vestingPercentage, vestingInterval);
+        emit AddAllocation(to, amount, unlockPercentage, finishVesting, cliffPercentage, cliffInterval);
     }
 
     function claim() external {
@@ -250,9 +246,9 @@ contract Vesting is Ownable, ERC223Recipient {
             Allocation storage b = beneficiaries[beneficiary][i];
             uint256 amount = b.amount;
             uint256 unlocked = amount * b.unlockPercentage / 100;
-            if (b.startVesting <= block.timestamp) {
-                uint256 intervals = (block.timestamp - b.startVesting) / b.vestingInterval + 1;
-                unlocked = unlocked + (amount * intervals * b.vestingPercentage / 100);
+            if (b.finishVesting <= block.timestamp) {
+                uint256 intervals = (block.timestamp - b.finishVesting) / b.cliffInterval + 1;
+                unlocked = unlocked + (amount * intervals * b.cliffPercentage / 100);
             }
             if (unlocked > amount) unlocked = amount;
             unlockedAmount += unlocked;
