@@ -242,7 +242,8 @@ contract Vesting is Ownable, ERC223Recipient {
     }
 
     function getUnlockedAmount(address beneficiary) public view returns(uint256 unlockedAmount) {
-        for (uint256 i = 0; i < beneficiaries[beneficiary].length; i++) {
+        uint256 len = beneficiaries[beneficiary].length;
+        for (uint256 i = 0; i < len; i++) {
             Allocation storage b = beneficiaries[beneficiary][i];
             uint256 amount = b.amount;
             uint256 unlocked = amount * b.unlockPercentage / 100;
